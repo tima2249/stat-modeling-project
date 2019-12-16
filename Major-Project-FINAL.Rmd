@@ -1,0 +1,1905 @@
+---
+title: "Analysis on Socioeconomic Status, Diet and Obesity"
+author: 'Sung Ho Kim, Shirley Ma, Sybilla Levenston, Nina Weiss, Yueyi Liu'
+header-includes:
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage[table]{xcolor}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+output:
+  bookdown::pdf_document2: default
+bibliography: bib.bib
+link-citations: yes
+---
+#Executive Summary
+
+The relationship between an individual's income and their diet has been well documented in research literature. Australia currently faces the rising problem of obesity, where almost 36 percent of adult Australians recorded being overweight and more than 1 in 4 Austrlians recorded being obese [@1]. While the statistics may be grave, there is much research being done into solutions that are easily implementable. The focus of this report is on one such solution, that being increasing the awareness of high levels of dietary fibre in preventing obesity and the diseases it entails [@2].  
+
+In order to deconstruct this problem, we have first investigated correlations between disease and income. The expectation was that whilst disease status and income might have a correlation, this correlation would be quite weak. The underlying reason lay with an individual's income having a crucial role in determining the foods they purchased. The findings matched what we had suspected; when applying $\chi^{2}$ tests it was found that two of the three obesity-related diseases (high cholesterol and hypertension) shared a dependance structure with income. However, Cramer's V for all three comparisons culminated with the same conclusion which was that the association between income and disease was weak. 
+
+The conclusions shed light on other factors such as diet and lifestyle habits which are majorly influenced by income levels. kNN and Linear Discriminant Analysis were two methods implemented in the construction of a classifier attempting to predict whether an individual would suffer from high cholesterol. Factors of interest included: weekly exercise duration, BMI levels, waist circumference and percentage of daily energy intake derived from trans and saturated fats. Both methods yielded a cross-validation error of 11.4 percent for males and 9.84 percent for females. 
+Interest then turned on the importance of fibre in promoting health and multivariate linear regression was performed examining the trends of dietary fibre consumption within unhealthy individuals. The models were constructed based on seven dietary elements deemed important by our friends studying nutrition and in almost all instances, a poor state of health was characterised heavily by a decline in fibre consumption. Principal Component Analysis (PCA) was implemented to further justify the importance of fibre, with the conclusion that fibre played a major role in each of the first principal components. 
+
+The last section explores the correlation between fibre intake and disease status, with CART classifiers being implemented on the datasets. The datasets were stratified accordingly, firstly by gender, secondly by income brackets. The CART analysis provided a readily interpretable visual analysis of the key risk factors associated with high cholesterol, high blood sugar levels and hypertension. 
+
+#Motivation and Agenda
+
+The obesity epidemic in Australia can be seen as a wicked problem, many causes with no simple solution. A strong aspect to explore in the amelioration of obesity, is through dietary intervention. We have chosen to look at the role that fibre plays in mediating or even preventing metabolic disease. Dietary fibre is a nutrient that cannot be entirely digested or absorbed. Dietary fibre can improve chronic disease by regulating satiety, blood sugar and bowel health. The consumption of 5 servings of whole grains per day is useful in lowering the risk of obesity by 10% in men and 4% in women [@3]. Controlling satiety is an important factor in regulating body weight, which can be suppressed by the viscous texture of soluble fibre in the gut and therefore increase the time of intestinal digestion and absorption from other nutrients [@7]. In terms of cardiovascular diseases, dietary fibre intake can positively affect blood pressure, blood cholesterol and blood glucose levels. The experiments that has been conducted with long term intake of 10g of dietary fibre supplement per day shows a decline of approximately 1-2mmHg in both systolic and diastolic pressure [@4]. Another 3 day study suggests that LDL-cholesterol and fasting glucose level would decrease by 12% in healthy individuals when comparing low (10g/day) and high (30g/day) fibre intake diet [@5]. Additionally, the fermentation of dietary fibre in the colon is beneficial to gut bacteria and healthiness of colon cells for preventing colorectal cancer. Additionally, the risk of developing type 2 diabetes would be significantly reduced by an increased intake of dietary fibre. [@6]. Thus, the effects of dietary fibre on obesity- and chronic-diseases-related variables is the focus of this project. 
+
+#Research Questions and Statistical Formulation
+
+1. Whether income has any impact on an individual's chance to develop diseases related to obesity. How strong is this impact? \newline
+2. What are unhealthy males and females doing wrong when it comes to their diet? We would like to investigate this in the context of their income, so is the trend the same across poor, middle class and wealthy people? What is the trend and overall importance of fibre to a healthy diet? \newline
+3. We would like to also investigate other factors, on top of fibre which could prevent high cholesterol, high blood sugar levels and hypertension.
+
+From a statistical viewpoint, the aforementioned questions could be reinterpreted and approached as follows: \newline
+1. Perform tests of independence between income and the three chosen diseases. Determine the strength of their association. \newline
+2. Take key components of daily diet as predictor variables and construct an appropriate model which underlines the trends present within unhealthy individuals. The notion of unhealthy is henceforth pinned to a BMI classification of overweight and higher. \newline
+3. Develop a classifier which incorporates fibre as well as factors relating to the disease for which we are trying to classify. Draw conclusions as to what the key risk factors are and if they are preventable in any way. \newline
+
+#Correlations and Classifiers: Income and Disease
+
+##Question Focus: 
+
+The first question attempts to determine whether a correlation is present between an individual's income status and whether they suffer from obesity-related diseases. The diseases of interest are high cholesterol levels (HCHOLBC), high sugar levels (HSUGBC) and hypertensive disease (HYPBC). 
+
+An initial check for independence has been accomplished through Pearson's $\chi^{2}$ test.  
+
+```{r Read and Tidy Data, include = FALSE}
+dat_orig <- read.csv("/Users/shirleyma/Desktop/stat3014/nutmstatData2018.csv",header=TRUE) #Load in the data 
+dim(dat_orig)#Produces 12153 observations,each with 144 parameters. These parameters may be categorical, binary or numerical and it is important to set the unapplicable values as N/A.
+
+dat<-dat_orig #make the name more easier to type by giving it a simpler name. e.g. dat
+
+colNames <- colnames(dat_orig) #Produce the column (parameter) names of the original data set. 
+
+categoricalList<-c()
+categoricalList[ 1 ] <- FALSE #  BMISC 
+categoricalList[ 2 ] <- FALSE #  AGEC 
+categoricalList[ 3 ] <- TRUE #  SMSBC 
+categoricalList[ 4 ] <- TRUE #  COBBC 
+categoricalList[ 5 ] <- TRUE #  FEMLSBC 
+categoricalList[ 6 ] <- FALSE #  PHDKGWBC 
+categoricalList[ 7 ] <- FALSE #  PHDCMHBC 
+categoricalList[ 8 ] <- FALSE #  EXLWTBC 
+categoricalList[ 9 ] <- FALSE #  EXLWMBC 
+categoricalList[ 10 ] <- FALSE #  EXLWVBC 
+categoricalList[ 11 ] <- FALSE #  PHDCMWBC 
+categoricalList[ 12 ] <- FALSE #  BMR 
+categoricalList[ 13 ] <- FALSE #  EIBMR1 
+categoricalList[ 14 ] <- TRUE #  SF2SA1QN 
+categoricalList[ 15 ] <- TRUE #  INCDEC 
+categoricalList[ 16 ] <- TRUE #  DIABBC 
+categoricalList[ 17 ] <- TRUE #  HCHOLBC 
+categoricalList[ 18 ] <- TRUE #  HSUGBC 
+categoricalList[ 19 ] <- TRUE #  HYPBC 
+categoricalList[ 20 ] <- FALSE #  ENERGYT1 
+categoricalList[ 21 ] <- FALSE #  ENRGYT1 
+categoricalList[ 22 ] <- FALSE #  MOISTT1 
+categoricalList[ 23 ] <- FALSE #  PROTT1 
+categoricalList[ 24 ] <- FALSE #  FATT1 
+categoricalList[ 25 ] <- FALSE #  CHOWSAT1 
+categoricalList[ 26 ] <- FALSE #  CHOWOAT1 
+categoricalList[ 27 ] <- FALSE #  STARCHT1 
+categoricalList[ 28 ] <- FALSE #  SUGART1 
+categoricalList[ 29 ] <- FALSE #  FIBRET1 
+categoricalList[ 30 ] <- FALSE #  ALCT1 
+categoricalList[ 31 ] <- FALSE #  PREVAT1 
+categoricalList[ 32 ] <- FALSE #  PROVAT1 
+categoricalList[ 33 ] <- FALSE #  RETEQT1 
+categoricalList[ 34 ] <- FALSE #  B1T1 
+categoricalList[ 35 ] <- FALSE #  B2T1 
+categoricalList[ 36 ] <- FALSE #  B3T1 
+categoricalList[ 37 ] <- FALSE #  NIACINT1 
+categoricalList[ 38 ] <- FALSE #  FOLATT1 
+categoricalList[ 39 ] <- FALSE #  FOLICT1 
+categoricalList[ 40 ] <- FALSE #  TOTFOLT1 
+categoricalList[ 41 ] <- FALSE #  FOLEQT1 
+categoricalList[ 42 ] <- FALSE #  B6T1 
+categoricalList[ 43 ] <- FALSE #  B12T1 
+categoricalList[ 44 ] <- FALSE #  VITCT1 
+categoricalList[ 45 ] <- FALSE #  VITET1 
+categoricalList[ 46 ] <- FALSE #  CALCT1 
+categoricalList[ 47 ] <- FALSE #  IODINET1 
+categoricalList[ 48 ] <- FALSE #  IRONT1 
+categoricalList[ 49 ] <- FALSE #  MAGT1 
+categoricalList[ 50 ] <- FALSE #  PHOST1 
+categoricalList[ 51 ] <- FALSE #  POTAST1 
+categoricalList[ 52 ] <- FALSE #  SELT1 
+categoricalList[ 53 ] <- FALSE #  SODIUMT1 
+categoricalList[ 54 ] <- FALSE #  ZINCT1 
+categoricalList[ 55 ] <- FALSE #  CAFFT1 
+categoricalList[ 56 ] <- FALSE #  CHOLT1 
+categoricalList[ 57 ] <- FALSE #  SATFATT1 
+categoricalList[ 58 ] <- FALSE #  MUFATT1 
+categoricalList[ 59 ] <- FALSE #  PUFATT1 
+categoricalList[ 60 ] <- FALSE #  LAT1 
+categoricalList[ 61 ] <- FALSE #  ALAT1 
+categoricalList[ 62 ] <- FALSE #  LCN3T1 
+categoricalList[ 63 ] <- FALSE #  TRANST1 
+categoricalList[ 64 ] <- FALSE #  PROPER1 
+categoricalList[ 65 ] <- FALSE #  FATPER1 
+categoricalList[ 66 ] <- FALSE #  LAPER1 
+categoricalList[ 67 ] <- FALSE #  ALAPER1 
+categoricalList[ 68 ] <- FALSE #  CHOPER1 
+categoricalList[ 69 ] <- FALSE #  SUGPER1 
+categoricalList[ 70 ] <- FALSE #  STARPER1 
+categoricalList[ 71 ] <- FALSE #  ALCPER1 
+categoricalList[ 72 ] <- FALSE #  SATPER1 
+categoricalList[ 73 ] <- FALSE #  TRANPER1 
+categoricalList[ 74 ] <- FALSE #  FIBRPER1 
+categoricalList[ 75 ] <- FALSE #  MONOPER1 
+categoricalList[ 76 ] <- FALSE #  POLYPER1 
+categoricalList[ 77 ] <- FALSE #  ADTOTSE 
+categoricalList[ 78 ] <- TRUE #  BDYMSQ04 
+categoricalList[ 79 ] <- FALSE #  DIASTOL 
+categoricalList[ 80 ] <- TRUE #  DIETQ12 
+categoricalList[ 81 ] <- TRUE #  DIETQ14 
+categoricalList[ 82 ] <- TRUE #  DIETQ5 
+categoricalList[ 83 ] <- TRUE #  DIETQ8 
+categoricalList[ 84 ] <- TRUE #  DIETRDI 
+categoricalList[ 85 ] <- TRUE #  SABDYMS 
+categoricalList[ 86 ] <- TRUE #  SEX 
+categoricalList[ 87 ] <- FALSE #  SLPTIME 
+categoricalList[ 88 ] <- TRUE #  SMKDAILY 
+categoricalList[ 89 ] <- TRUE #  SMKSTAT 
+categoricalList[ 90 ] <- FALSE #  SYSTOL 
+categoricalList[ 91 ] <- TRUE #  ABSPID 
+categoricalList[ 92 ] <- FALSE #  GRAINS1N 
+categoricalList[ 93 ] <- FALSE #  WHOLGR1N 
+categoricalList[ 94 ] <- FALSE #  REFGRA1N 
+categoricalList[ 95 ] <- FALSE #  VEGLEG1N 
+categoricalList[ 96 ] <- FALSE #  GREENS1N 
+categoricalList[ 97 ] <- FALSE #  VGORSV1N 
+categoricalList[ 98 ] <- FALSE #  STARCH1N 
+categoricalList[ 99 ] <- FALSE #  LEGVEG1N 
+categoricalList[ 100 ] <- FALSE #  OTHVEG1N 
+categoricalList[ 101 ] <- FALSE #  FRUIT1N 
+categoricalList[ 102 ] <- FALSE #  FRJUIC1N 
+categoricalList[ 103 ] <- FALSE #  DAIRY1N 
+categoricalList[ 104 ] <- FALSE #  MEAT1N 
+categoricalList[ 105 ] <- FALSE #  RDMTL1N 
+categoricalList[ 106 ] <- FALSE #  RDMTLU1N 
+categoricalList[ 107 ] <- FALSE #  RDMTN1N 
+categoricalList[ 108 ] <- FALSE #  RDMTNU1N 
+categoricalList[ 109 ] <- FALSE #  RDMTNP1N 
+categoricalList[ 110 ] <- FALSE #  PLTYL1N 
+categoricalList[ 111 ] <- FALSE #  PLTYLU1N 
+categoricalList[ 112 ] <- FALSE #  FISH1N 
+categoricalList[ 113 ] <- FALSE #  EGGS1N 
+categoricalList[ 114 ] <- FALSE #  LEGMT1N 
+categoricalList[ 115 ] <- FALSE #  NUTS1N 
+categoricalList[ 116 ] <- FALSE #  WATER1N 
+categoricalList[ 117 ] <- FALSE #  UNSAT1N 
+categoricalList[ 118 ] <- FALSE #  FRESUG1N 
+categoricalList[ 119 ] <- FALSE #  ADDSUG1N 
+categoricalList[ 120 ] <- FALSE #  WATERG1N 
+categoricalList[ 121 ] <- FALSE #  PEFRESD1 
+categoricalList[ 122 ] <- FALSE #  PEADDSD1 
+categoricalList[ 123 ] <- TRUE #  ALTNTR 
+categoricalList[ 124 ] <- TRUE #  ALTRESB 
+categoricalList[ 125 ] <- TRUE #  APOBNTR 
+categoricalList[ 126 ] <- TRUE #  APOBRESB 
+categoricalList[ 127 ] <- TRUE #  B12RESB 
+categoricalList[ 128 ] <- TRUE #  BIORESPC 
+categoricalList[ 129 ] <- TRUE #  CHOLNTR 
+categoricalList[ 130 ] <- TRUE #  CHOLRESB 
+categoricalList[ 131 ] <- TRUE #  CVDMEDST 
+categoricalList[ 132 ] <- TRUE #  DIAHBRSK 
+categoricalList[ 133 ] <- TRUE #  FASTSTAD 
+categoricalList[ 134 ] <- TRUE #  FOLATREB 
+categoricalList[ 135 ] <- TRUE #  GGTNTR 
+categoricalList[ 136 ] <- TRUE #  GGTRESB 
+categoricalList[ 137 ] <- TRUE #  GLUCFPD 
+categoricalList[ 138 ] <- TRUE #  GLUCFREB 
+categoricalList[ 139 ] <- TRUE #  HBA1PREB 
+categoricalList[ 140 ] <- TRUE #  HDLCHREB 
+categoricalList[ 141 ] <- TRUE #  LDLNTR 
+categoricalList[ 142 ] <- TRUE #  LDLRESB 
+categoricalList[ 143 ] <- TRUE #  TRIGNTR 
+categoricalList[ 144 ] <- TRUE #  TRIGRESB 
+
+#Turn the Categorical Variables into factors. 
+for (i in 1:length(categoricalList)) {
+  if (categoricalList[ i ]) {
+      dat[,i] <- as.factor(dat[  ,i])
+  }
+}
+
+#Take care of variables with N/A terms that derives from a subset of the real number system. 
+dat$AGEC[dat$AGEC>=99]<-NA
+dat$EXLWTBC[dat$EXLWTBC>5250]<-NA 
+dat$EXLWMBC[dat$EXLWMBC>4830]<-NA
+dat$EXLWVBC[dat$EXLWVBC>4410]<-NA
+dat$BMR[dat$BMR>99995]<-NA
+dat$EIBMR1[dat$EIBMR1>9]<-NA
+dat$VITCT1[dat$VITCT1>=9999]<-NA
+dat$ADTOTSE[dat$ADTOTSE>9995]<-NA
+
+excludeList <- list()
+excludeList[[ 1 ]] <- c(0,98,99) #  BMISC 
+excludeList[[ 2 ]] <- c() #  AGEC 
+excludeList[[ 3 ]] <- c(0) #  SMSBC 
+excludeList[[ 4 ]] <- c() #  COBBC 
+excludeList[[ 5 ]] <- c(9) #  FEMLSBC 
+excludeList[[ 6 ]] <- c(0,997,998,999) #  PHDKGWBC 
+excludeList[[ 7 ]] <- c(0,998,999) #  PHDCMHBC 
+excludeList[[ 8 ]] <- c() #  EXLWTBC 
+excludeList[[ 9 ]] <- c() #  EXLWMBC 
+excludeList[[ 10 ]] <- c() #  EXLWVBC 
+excludeList[[ 11 ]] <- c(0,998,999) #  PHDCMWBC 
+excludeList[[ 12 ]] <- c() #  BMR 
+excludeList[[ 13 ]] <- c() #  EIBMR1 
+excludeList[[ 14 ]] <- c() #  SF2SA1QN 
+excludeList[[ 15 ]] <- c(0,98,99) #  INCDEC 
+excludeList[[ 16 ]] <- c() #  DIABBC 
+excludeList[[ 17 ]] <- c(3) #  HCHOLBC 
+excludeList[[ 18 ]] <- c(3) #  HSUGBC 
+excludeList[[ 19 ]] <- c(3) #  HYPBC 
+excludeList[[ 20 ]] <- c() #  ENERGYT1 
+excludeList[[ 21 ]] <- c() #  ENRGYT1 
+excludeList[[ 22 ]] <- c() #  MOISTT1 
+excludeList[[ 23 ]] <- c() #  PROTT1 
+excludeList[[ 24 ]] <- c() #  FATT1 
+excludeList[[ 25 ]] <- c() #  CHOWSAT1 
+excludeList[[ 26 ]] <- c() #  CHOWOAT1 
+excludeList[[ 27 ]] <- c() #  STARCHT1 
+excludeList[[ 28 ]] <- c() #  SUGART1 
+excludeList[[ 29 ]] <- c() #  FIBRET1 
+excludeList[[ 30 ]] <- c() #  ALCT1 
+excludeList[[ 31 ]] <- c() #  PREVAT1 
+excludeList[[ 32 ]] <- c() #  PROVAT1 
+excludeList[[ 33 ]] <- c() #  RETEQT1 
+excludeList[[ 34 ]] <- c() #  B1T1 
+excludeList[[ 35 ]] <- c() #  B2T1 
+excludeList[[ 36 ]] <- c() #  B3T1 
+excludeList[[ 37 ]] <- c() #  NIACINT1 
+excludeList[[ 38 ]] <- c() #  FOLATT1 
+excludeList[[ 39 ]] <- c() #  FOLICT1 
+excludeList[[ 40 ]] <- c() #  TOTFOLT1 
+excludeList[[ 41 ]] <- c() #  FOLEQT1 
+excludeList[[ 42 ]] <- c() #  B6T1 
+excludeList[[ 43 ]] <- c() #  B12T1 
+excludeList[[ 44 ]] <- c() #  VITCT1 
+excludeList[[ 45 ]] <- c() #  VITET1 
+excludeList[[ 46 ]] <- c() #  CALCT1 
+excludeList[[ 47 ]] <- c() #  IODINET1 
+excludeList[[ 48 ]] <- c() #  IRONT1 
+excludeList[[ 49 ]] <- c() #  MAGT1 
+excludeList[[ 50 ]] <- c() #  PHOST1 
+excludeList[[ 51 ]] <- c() #  POTAST1 
+excludeList[[ 52 ]] <- c() #  SELT1 
+excludeList[[ 53 ]] <- c() #  SODIUMT1 
+excludeList[[ 54 ]] <- c() #  ZINCT1 
+excludeList[[ 55 ]] <- c() #  CAFFT1 
+excludeList[[ 56 ]] <- c() #  CHOLT1 
+excludeList[[ 57 ]] <- c() #  SATFATT1 
+excludeList[[ 58 ]] <- c() #  MUFATT1 
+excludeList[[ 59 ]] <- c() #  PUFATT1 
+excludeList[[ 60 ]] <- c() #  LAT1 
+excludeList[[ 61 ]] <- c() #  ALAT1 
+excludeList[[ 62 ]] <- c() #  LCN3T1 
+excludeList[[ 63 ]] <- c() #  TRANST1 
+excludeList[[ 64 ]] <- c() #  PROPER1 
+excludeList[[ 65 ]] <- c() #  FATPER1 
+excludeList[[ 66 ]] <- c() #  LAPER1 
+excludeList[[ 67 ]] <- c() #  ALAPER1 
+excludeList[[ 68 ]] <- c() #  CHOPER1 
+excludeList[[ 69 ]] <- c() #  SUGPER1 
+excludeList[[ 70 ]] <- c() #  STARPER1 
+excludeList[[ 71 ]] <- c() #  ALCPER1 
+excludeList[[ 72 ]] <- c() #  SATPER1 
+excludeList[[ 73 ]] <- c() #  TRANPER1 
+excludeList[[ 74 ]] <- c() #  FIBRPER1 
+excludeList[[ 75 ]] <- c() #  MONOPER1 
+excludeList[[ 76 ]] <- c() #  POLYPER1 
+excludeList[[ 77 ]] <- c(9996,9999) #  ADTOTSE 
+excludeList[[ 78 ]] <- c(0,6) #  BDYMSQ04 
+excludeList[[ 79 ]] <- c(0,998,999) #  DIASTOL 
+excludeList[[ 80 ]] <- c(0,6) #  DIETQ12 
+excludeList[[ 81 ]] <- c(0,6) #  DIETQ14 
+excludeList[[ 82 ]] <- c(0) #  DIETQ5 
+excludeList[[ 83 ]] <- c(0) #  DIETQ8 
+excludeList[[ 84 ]] <- c(0,3) #  DIETRDI 
+excludeList[[ 85 ]] <- c(0,8,9) #  SABDYMS 
+excludeList[[ 86 ]] <- c() #  SEX 
+excludeList[[ 87 ]] <- c(0,9998,9999) #  SLPTIME 
+excludeList[[ 88 ]] <- c(0) #  SMKDAILY 
+excludeList[[ 89 ]] <- c(0) #  SMKSTAT 
+excludeList[[ 90 ]] <- c(0,998,999) #  SYSTOL 
+excludeList[[ 91 ]] <- c() #  ABSPID 
+excludeList[[ 92 ]] <- c() #  GRAINS1N 
+excludeList[[ 93 ]] <- c() #  WHOLGR1N 
+excludeList[[ 94 ]] <- c() #  REFGRA1N 
+excludeList[[ 95 ]] <- c() #  VEGLEG1N 
+excludeList[[ 96 ]] <- c() #  GREENS1N 
+excludeList[[ 97 ]] <- c() #  VGORSV1N 
+excludeList[[ 98 ]] <- c() #  STARCH1N 
+excludeList[[ 99 ]] <- c() #  LEGVEG1N 
+excludeList[[ 100 ]] <- c() #  OTHVEG1N 
+excludeList[[ 101 ]] <- c() #  FRUIT1N 
+excludeList[[ 102 ]] <- c() #  FRJUIC1N 
+excludeList[[ 103 ]] <- c() #  DAIRY1N 
+excludeList[[ 104 ]] <- c() #  MEAT1N 
+excludeList[[ 105 ]] <- c() #  RDMTL1N 
+excludeList[[ 106 ]] <- c() #  RDMTLU1N 
+excludeList[[ 107 ]] <- c() #  RDMTN1N 
+excludeList[[ 108 ]] <- c() #  RDMTNU1N 
+excludeList[[ 109 ]] <- c() #  RDMTNP1N 
+excludeList[[ 110 ]] <- c() #  PLTYL1N 
+excludeList[[ 111 ]] <- c() #  PLTYLU1N 
+excludeList[[ 112 ]] <- c() #  FISH1N 
+excludeList[[ 113 ]] <- c() #  EGGS1N 
+excludeList[[ 114 ]] <- c() #  LEGMT1N 
+excludeList[[ 115 ]] <- c() #  NUTS1N 
+excludeList[[ 116 ]] <- c() #  WATER1N 
+excludeList[[ 117 ]] <- c() #  UNSAT1N 
+excludeList[[ 118 ]] <- c() #  FRESUG1N 
+excludeList[[ 119 ]] <- c() #  ADDSUG1N 
+excludeList[[ 120 ]] <- c() #  WATERG1N 
+excludeList[[ 121 ]] <- c() #  PEFRESD1 
+excludeList[[ 122 ]] <- c() #  PEADDSD1 
+excludeList[[ 123 ]] <- c(0,8) #  ALTNTR 
+excludeList[[ 124 ]] <- c(97,98) #  ALTRESB 
+excludeList[[ 125 ]] <- c(0,8) #  APOBNTR 
+excludeList[[ 126 ]] <- c(97,98) #  APOBRESB 
+excludeList[[ 127 ]] <- c(97,98) #  B12RESB 
+excludeList[[ 128 ]] <- c(0) #  BIORESPC
+excludeList[[ 129 ]] <- c(0,8) #  CHOLNTR 
+excludeList[[ 130 ]] <- c(97,98) #  CHOLRESB 
+excludeList[[ 131 ]] <- c(0,8) #  CVDMEDST 
+excludeList[[ 132 ]] <- c(0,8) #  DIAHBRSK 
+excludeList[[ 133 ]] <- c(0) #  FASTSTAD 
+excludeList[[ 134 ]] <- c(97,98) #  FOLATREB 
+excludeList[[ 135 ]] <- c(8) #  GGTNTR 
+excludeList[[ 136 ]] <- c(97,98) #  GGTRESB 
+excludeList[[ 137 ]] <- c(0,8) #  GLUCFPD 
+excludeList[[ 138 ]] <- c(97,98) #  GLUCFREB 
+excludeList[[ 139 ]] <- c(7,8) #  HBA1PREB 
+excludeList[[ 140 ]] <- c(7,8) #  HDLCHREB 
+excludeList[[ 141 ]] <- c(0,8) #  LDLNTR 
+excludeList[[ 142 ]] <- c(97,98) #  LDLRESB 
+excludeList[[ 143 ]] <- c(0,8) #  TRIGNTR 
+excludeList[[ 144 ]] <- c(97,98) #  TRIGRESB 
+
+for (i in 1:length(excludeList)) {
+  dat[ dat[,i]%in%excludeList[[ i ]],i] <- NA
+}
+```
+```{r Rounding of values for Numerical Data Types, include=FALSE}
+#Some variables have specified the desired number of decimal places to use. For other numerical variables we will set the desired number of significant figures to 3. For servings of food, as these tend to be in whole numbers, we will reduce the number of significant figures to 2. 
+
+dat$BMISC<-round(dat$BMISC,2)
+dat$PHDKGWBC<-round(dat$PHDKGWBC,1)
+dat$PHDCMHBC<-round(dat$PHDCMHBC,1)
+dat$EXLWTBC<-signif(dat$EXLWTBC,3)
+dat$EXLWMBC<-signif(dat$EXLWMBC,3)
+dat$EXLWVBC<-signif(dat$EXLWVBC,3)
+dat$PHDCMWBC<-round(dat$PHDCMWBC,1)
+dat$BMR<-signif(dat$BMR,3)
+dat$EIBMR1<-round(dat$EIBMR1,4)
+dat$ENERGYT1<-round(dat$ENERGYT1,2)
+dat$ENRGYT1<-round(dat$ENRGYT1,2)
+dat$MOISTT1<-round(dat$MOISTT1,2)
+dat$PROTT1<-round(dat$PROTT1,2)
+dat$FATT1<-round(dat$FATT1,2)
+dat$CHOWSAT1<-round(dat$CHOWSAT1,2)
+dat$CHOWOAT1<-round(dat$CHOWOAT1,2)
+dat$STARCHT1<-round(dat$STARCHT1,2)
+dat$SUGART1<-round(dat$SUGART1,2)
+dat$FIBRET1<-round(dat$FIBRET1,2)
+dat$ALCT1<-round(dat$ALCT1,2)
+dat$PREVAT1<-round(dat$PREVAT1,2)
+dat$PROVAT1<-round(dat$PROVAT1,2)
+dat$RETEQT1<-round(dat$RETEQT1,2)
+dat$B1T1<-round(dat$B1T1,2)
+dat$B2T1<-round(dat$B2T1,2)
+dat$B3T1<-round(dat$B3T1,2)
+dat$NIACINT1<-round(dat$NIACINT1,2)
+dat$FOLATT1<-round(dat$FOLATT1,2)
+dat$FOLICT1<-round(dat$FOLICT1,2)
+dat$TOTFOLT1<-round(dat$TOTFOLT1,2)
+dat$FOLEQT1<-round(dat$FOLEQT1,2)
+dat$B6T1<-round(dat$B6T1,2)
+dat$B12T1<-round(dat$B12T1,2)
+dat$VITCT1<-round(dat$VITCT1,2)
+dat$VITET1<-round(dat$VITET1,2)
+dat$CALCT1<-round(dat$CALCT1,2)
+dat$IODINET1<-round(dat$IODINET1,2)
+dat$IRONT1<-round(dat$IRONT1,2)
+dat$MAGT1<-round(dat$MAGT1,2)
+dat$PHOST1<-round(dat$PHOST1,2)
+dat$POTAST1<-round(dat$POTAST1,2)
+dat$SELT1<-round(dat$SELT1,2)
+dat$SODIUMT1<-round(dat$SODIUMT1,2)
+dat$ZINCT1<-round(dat$ZINCT1,2)
+dat$CAFFT1<-round(dat$CAFFT1,2)
+dat$CHOLT1<-round(dat$CHOLT1,2)
+dat$SATFATT1<-round(dat$SATFATT1,2)
+dat$MUFATT1<-round(dat$MUFATT1,2)
+dat$PUFATT1<-round(dat$PUFATT1,2)
+dat$LAT1<-round(dat$LAT1,2)
+dat$ALAT1<-round(dat$ALAT1,2)
+dat$LCN3T1<-round(dat$LCN3T1,2)
+dat$TRANST1<-round(dat$TRANST1,2)
+dat$PROPER1<-round(dat$PROPER1,2)
+dat$FATPER1<-round(dat$FATPER1,2)
+dat$LAPER1<-round(dat$LAPER1,2)
+dat$ALAPER1<-round(dat$ALAPER1,2)
+dat$CHOPER1<-round(dat$CHOPER1,2)
+dat$SUGPER1<-round(dat$SUGPER1,2)
+dat$STARPER1<-round(dat$STARPER1,2)
+dat$ALCPER1<-round(dat$ALCPER1,2)
+dat$SATPER1<-round(dat$SATPER1,2)
+dat$TRANPER1<-round(dat$TRANPER1,2)
+dat$FIBRPER1<-round(dat$FIBRPER1,2)
+dat$MONOPER1<-round(dat$MONOPER1,2)
+dat$POLYPER1<-round(dat$POLYPER1,2)
+dat$PEFRESD1<-signif(dat$PEFRESD1,3)
+dat$PEADDSD1<-signif(dat$PEADDSD1,3)
+dat$ADTOTSE<-signif(dat$ADTOTSE,3)
+dat$DIASTOL<-signif(dat$DIASTOL,3)
+dat$SLPTIME<-signif(dat$SLPTIME,3)
+dat$SYSTOL<-signif(dat$SYSTOL,3)
+dat$GRAINS1N<-signif(dat$GRAINS1N,2)
+dat$WHOLGR1N<-signif(dat$WHOLGR1N,2)
+dat$REFGRA1N<-signif(dat$REFGRA1N,2)
+dat$VEGLEG1N<-signif(dat$VEGLEG1N,2)
+dat$GREENS1N<-signif(dat$GREENS1N,2)
+dat$VGORSV1N<-signif(dat$VGORSV1N,2)
+dat$STARCH1N<-signif(dat$STARCH1N,2)
+dat$LEGVEG1N<-signif(dat$LEGVEG1N,2)
+dat$OTHVEG1N<-signif(dat$OTHVEG1N,2)
+dat$FRUIT1N<-signif(dat$FRUIT1N,2)
+dat$FRJUIC1N<-signif(dat$FRJUIC1N,2)
+dat$DAIRY1N<-signif(dat$DAIRY1N,2)
+dat$MEAT1N<-signif(dat$MEAT1N,2)
+dat$RDMTL1N<-signif(dat$RDMTL1N,2)
+dat$RDMTLU1N<-signif(dat$RDMTLU1N,2)
+dat$RDMTN1N<-signif(dat$RDMTN1N,2)
+dat$RDMTNU1N<-signif(dat$RDMTNU1N,2)
+dat$RDMTNP1N<-signif(dat$RDMTNP1N,2)
+dat$PLTYL1N<-signif(dat$PLTYL1N,2)
+dat$PLTYLU1N<-signif(dat$PLTYLU1N,2)
+dat$FISH1N<-signif(dat$FISH1N,2)
+dat$EGGS1N<-signif(dat$EGGS1N,2)
+dat$LEGMT1N<-signif(dat$LEGMT1N,2)
+dat$NUTS1N<-signif(dat$NUTS1N,2)
+dat$WATER1N<-signif(dat$WATER1N,2)
+dat$UNSAT1N<-signif(dat$UNSAT1N,2)
+dat$FRESUG1N<-signif(dat$FRESUG1N,2)
+dat$ADDSUG1N<-signif(dat$ADDSUG1N,2)
+dat$WATERG1N<-signif(dat$WATERG1N,2)
+```
+```{r Data Cleaning Algorithm, include=FALSE}
+countNAs = function(x) {
+  sum(is.na(x))
+}
+perc_row=apply(dat,1,countNAs)/144
+perc_col=apply(dat,2,countNAs)/12153
+dat=dat[,which(perc_col<0.5)]
+dat = na.omit(dat)
+
+``` 
+```{r Partitioning the Data Set,include=FALSE}
+dat_part1 = dat[,c("INCDEC","SEX","EXLWTBC","HCHOLBC","HSUGBC","HYPBC")] 
+#After having separated the data, we can deal with the missing values as follows
+keepr<-which(apply(is.na(dat_part1),1,mean)==0)
+dat_part1 = dat_part1[keepr,]
+colNames_part1.clean<-colnames(dat_part1) 
+categoricalList_part1.clean<-categoricalList[which(colnames(dat)%in%colnames(dat_part1))]
+dim(dat_part1)
+indsCont_part1.clean = which(!categoricalList_part1.clean) #Give me a list of indices which map to Numerical Variables
+indsCat_part1.clean  = which(categoricalList_part1.clean) #Give me a list of indices which map to the Categorical Variables
+```
+```{r Condensing INCDEC and HCHOLBC Categories, include = FALSE}
+library(plyr)
+#We must first correctly partition the data set. The first part focuses on people from lower socioeconomic classes. 
+#Given that the INCDEC variable splits socioeconomic status into 10 deciles, we arbitrarily set the first 3 as Low,
+#the middle 4 as Average and the last 3 as High socioeconomic class. 
+
+#First Chi-Square Test of Independency: INCDEC vs HCHOLBC
+
+#Some issues we need to address include the small count value of 35 observations of option 2 in HCHOLBC. 
+#We can remedy this by adding the counts from option 2 into option 1. Another problem is option 3 in HCHOLBC:
+#This option states that the person is currently not affected by high cholesterol but has been affected previously. We will not take into account option 3. 
+
+
+#Furthermore, we would like to generalise the 10 deciles in INCDEC into 3 categories: LOW(1), MEDIUM(2) and HIGH(3) 
+#socioeconomic status. The code to do this is shown below:
+dat_part1$INCDEC[dat_part1$INCDEC=="2"]<-"1"
+dat_part1$INCDEC[dat_part1$INCDEC=="3"]<-"1"
+dat_part1$INCDEC[dat_part1$INCDEC=="4"]<-"2"
+dat_part1$INCDEC[dat_part1$INCDEC=="5"]<-"2"
+dat_part1$INCDEC[dat_part1$INCDEC=="6"]<-"2"
+dat_part1$INCDEC[dat_part1$INCDEC=="7"]<-"2"
+dat_part1$INCDEC[dat_part1$INCDEC=="8"]<-"3"
+dat_part1$INCDEC[dat_part1$INCDEC=="9"]<-"3"
+dat_part1$INCDEC[dat_part1$INCDEC=="10"]<-"3"
+
+#Merging option 2 in HCHOLBC into option 1. Also relabelling option 5: Never been affected by high cholesterol. The end result is "1": Currently affected by High Cholesterol and "2": Not affected by High Cholesterol
+dat_part1$HCHOLBC[dat_part1$HCHOLBC=="2"]<-"1"
+dat_part1$HCHOLBC[dat_part1$HCHOLBC=="5"]<-"2"
+```
+```{r Preparing INCDEC/HCHOLBC Table, include=FALSE}
+#We need to drop un-used factors from the data frame before proceeding. 
+dat_part1$INCDEC<-factor(dat_part1$INCDEC)
+dat_part1$HCHOLBC<-factor(dat_part1$HCHOLBC)
+
+test1<-data.frame(dat_part1$INCDEC,dat_part1$HCHOLBC)
+str(test1)
+table1<-table(test1)
+```
+
+```{r Chi-Squared Test: INCDEC vs. HCHOLBC}
+chi1<-chisq.test(table1)
+chi1
+```
+The $\chi^{2}$ test for independence yields a p-value of $2.2 * 10^{-16}$. We can conclude from this p-value that there is significant evidence to suggest the existence of some kind of dependancy structure between an individual's income levels and whether they suffer from high cholesterol levels.
+
+```{r Preparing INCDEC and HSUGBC Table, include=FALSE}
+#INCDEC vs. HSUGBC
+dat_part1$HSUGBC[dat_part1$HSUGBC=="2"]<-"1"
+dat_part1$HSUGBC[dat_part1$HSUGBC=="5"]<-"2"
+dat_part1$HSUGBC<-factor(dat_part1$HSUGBC)
+test2<-data.frame(dat_part1$INCDEC,dat_part1$HSUGBC)
+str(test2)
+table2<-table(test2)
+```
+
+```{r Chi-Squared Test: INCDEC vs. HSUGBC}
+chi2<-chisq.test(table2)
+chi2
+```
+The $\chi^{2}$ test here yields a p-value of 0.06 ($\approx 0.05$) and we conclude there is insufficient evidence to suggest a dependency between socioeconomic status and high sugar levels. 
+
+```{r Preparing INCDEC and HYPBC Table, include=FALSE}
+#INCDEC vs. HYPBC
+dat_part1$HYPBC[dat_part1$HYPBC=="2"]<-"1"
+dat_part1$HYPBC[dat_part1$HYPBC=="5"]<-"2"
+dat_part1$HYPBC<-factor(dat_part1$HYPBC)
+test3<-data.frame(dat_part1$INCDEC,dat_part1$HYPBC)
+str(test3)
+table3<-table(test3)
+```
+
+```{r Chi-Squraed Test: INCDEC vs. HYPBC}
+chi3<-chisq.test(table3)
+chi3
+```
+The $\chi^{2}$ test for income vs. hypertension yields a p-value $<2.2e-16$. From this p-value we draw the conclusion that there exists a dependancy structure between income and whether the individual suffers from hypertension. 
+
+###Cramer's V: A Measure of Association
+Cramer's V was then implemented in order to give a better indication about the strengths of association. 
+
+```{r Preparing Cramer V function, include=FALSE, warning=F, message=F}
+#library(cvTools)
+cv.test = function(x,y) {
+  CV = sqrt(chisq.test(x, y, correct=FALSE)$statistic /
+    (length(x) * (min(length(unique(x)),length(unique(y))) - 1)))
+  print.noquote("Cram?r V / Phi:")
+  return(as.numeric(CV))
+}
+```
+
+```{r, Cramer V/ Categorical Correlation Coefficients, include=F}
+c1<-with(dat_part1, cv.test(INCDEC, HCHOLBC))
+c2<-with(dat_part1, cv.test(INCDEC, HSUGBC))
+c3<-with(dat_part1, cv.test(INCDEC, HYPBC))
+```
+Comparison    Cramer's V       
+-----------   --------------   
+HCHOLBC       0.126               
+HSUGBC        0.032           
+HYPBC         0.180     
+-----------  --------------   
+The Cramer's V for INCDEC vs. HSUGBC is extremely low, suggesting there is a negligible association between these two variables. This agrees with the p-value obtained in the corresponding $\chi^{2}$ test. While the other two coefficients are substantially larger, they still suggest extremely weak associations. 
+
+###kNN and LDA Classifiers for High Cholesterol Status: 
+The weak associations give rise for taking the report in another direction. We have substantial evidence to show that income clearly plays a role in determining disease status of an individual, however insufficient that interaction may be. We can begin with a rudimentary implementation of kNN and LDA classifiers for one of the diseases. Discussion with nutrition students elucidated that high cholesterol status is majorly affected by the constituents of one's diet. Other risk factors included obesity, large waist circumference and lack of exercise, which were all taken into account upon building the classifier. The aim of this section is thus being able to create a classifier which can predict what kind of individuals would suffer from high cholesterol.   
+
+```{r, SVM for HCHOLBC, include= F, message=F, warning=F}
+library(caret)
+svmchol<-dat[,c( "SEX","HCHOLBC","SATPER1", "ADTOTSE", "BMISC", "EXLWTBC", "PHDCMWBC")]
+
+svmchol$HCHOLBC[svmchol$HCHOLBC=="2"]<-"1"
+svmchol$HCHOLBC[svmchol$HCHOLBC=="5"]<-"2"
+svmchol$HCHOLBC<-factor(svmchol$HCHOLBC)
+
+#Split into male and female classes.
+svmchol.male<-svmchol[svmchol$SEX=="1",]
+svmchol.female<-svmchol[svmchol$SEX=="2",]
+
+svmchol.male<-svmchol.male[,-1]
+svmchol.female<-svmchol.female[,-1]
+
+str(svmchol.male) 
+str(svmchol.female)
+```
+```{r,include=F,warning=F,message=F}
+# First we are going to load the cross-validation function
+cvFolds = function (n, K = 5, R = 1, type = c("random", "consecutive", "interleaved")) 
+{
+  n <- round(rep(n, length.out = 1))
+  if (!isTRUE(n > 0)) 
+    stop("'n' must be positive")
+
+  K <- round(rep(K, length.out = 1))
+  if (!isTRUE((K > 1) && K <= n)) 
+    stop("'K' outside allowable range")
+
+  type <- if (K == n) 
+    "leave-one-out"
+  else match.arg(type)
+  if (type == "random") {
+    R <- round(rep(R, length.out = 1))
+    if (!isTRUE(R > 0)) 
+      R <- 1
+    subsets <- replicate(R, sample(n))
+  }
+  else {
+    R <- 1
+    subsets <- as.matrix(seq_len(n))
+  }
+  which <- rep(seq_len(K), length.out = n)
+  if (type == "consecutive") 
+    which <- rep.int(seq_len(K), tabulate(which))
+  folds <- list(n = n, K = K, R = R, subsets = subsets, which = which)
+  class(folds) <- "cvFolds"
+  folds
+}
+```
+```{r,include=F,message=F,warning=F}
+# First load the library with the knn function
+library(class)
+
+# The following function does crossvalidation using
+# X - predictor matrix
+# y - class matrix
+# k - value of k in KNN
+# V - number of CV folds
+# seed - (optional) internally sets the seed.
+cv.knn = function(X,y,k=k,V,seed=NA)
+{
+  # Set the seed
+  if (!is.na(seed)) {
+    set.seed(seed)
+  }
+  
+  # Set n
+  n = length(y)
+  
+  # Split the data up into V folds
+  cvSets <- cvFolds(n, V)
+  
+  # Loop through each fold and calculate the error for that fold
+  test.error.knn <- c()
+  for (i in 1:V) 
+  {
+    # set the indices corresponding to the training and test sets
+    testInds <- cvSets$subsets[which(cvSets$which==i)]
+    trainInds <- (1:n)[-testInds]
+    
+    # Separate y and X into the training and test sets
+    y.test <- y[testInds]
+    X.test <- X[ testInds,]
+    y.train <- y[trainInds]
+    X.train <- X[trainInds,]
+    
+    # Do classification on ith fold
+    results.knn <- knn(train=X.train,test=X.test,cl=y.train,k=k)
+    
+    # Calcuate the test error for this fold
+    test.error.knn[i] <- sum(results.knn!=y.test)
+  }
+  
+  # Calculate the mean error over each fold
+  cv.error = sum(test.error.knn)/n
+  
+  # Return the results
+  return(cv.error)
+}
+```
+```{r,include=F}
+k.values = seq(1,49,by=2)
+```
+```{r, include=F,message=F,warning=F}
+#Set up X2 as a predictor matrix without intercept, making use of predictors from cleaned
+#data frame.
+y.m<-svmchol.male$HCHOLBC
+X2.male = model.matrix(~-1+svmchol.male$SATPER1+svmchol.male$ADTOTSE+svmchol.male$BMISC+svmchol.male$EXLWTBC+svmchol.male$PHDCMWBC,data=svmchol.male)
+
+y.f<-svmchol.female$HCHOLBC
+X2.female<-model.matrix(~-1+svmchol.female$SATPER1+svmchol.female$ADTOTSE+svmchol.female$BMISC+svmchol.female$EXLWTBC+svmchol.female$PHDCMWBC,data=svmchol.female)
+```
+```{r,warning=F, message=F,include=F}
+library(ggplot2)
+V = 10
+
+# Loop through all values of k and calculate the cross-validation error
+cv.errors = c()
+for (i in 1:length(k.values)) {
+  cv.errors[i] = cv.knn(X2.male,as.factor(y.m),k=k.values[i],V,seed=1)
+}
+plot(k.values,cv.errors,type="l",xlab="value of k",ylab="cross-validation error",cex.lab=1.5,
+    main="kNN CV Error: MALE",cex.main=2)
+abline(v=13,col=1,lty=3)
+```
+```{r, warning=F,message=F,include=F}
+k.values[which.min(cv.errors)]
+min(cv.errors)
+```
+```{r, warning=F, message=F,include=F}
+cv.errors.once = cv.errors
+
+plot(k.values,cv.errors,type="l",xlab="value of k",ylab="cross-validation error",cex.lab=1.5,
+    main="CV errors for K-nearest neighbours",cex.main=2)
+
+
+R = 20
+for (r in 1:R) {
+  for (i in 1:length(k.values)) {
+    cv.errors[i] = cv.knn(X2.male,as.factor(y.m),k=k.values[i],V)
+  }
+  lines(k.values,cv.errors)
+}
+lines(k.values,cv.errors.once,col="red",lwd=3)
+abline(v=13,col=3,lty=3)
+```
+```{r,warning=F, message=F,include=F}
+library(ggplot2)
+V = 10
+
+# Loop through all values of k and calculate the cross-validation error
+cv.errors = c()
+for (i in 1:length(k.values)) {
+  cv.errors[i] = cv.knn(X2.female,as.factor(y.f),k=k.values[i],V,seed=1)
+}
+plot(k.values,cv.errors,type="l",xlab="value of k",ylab="cross-validation error",cex.lab=1.5,
+    main="kNN CV Error: FEMALE",cex.main=2)
+abline(v=15,col=1,lty=3)
+```
+```{r, warning=F,message=F,include=F}
+k.values[which.min(cv.errors)]
+min(cv.errors)
+```
+```{r, warning=F, message=F,include=F}
+cv.errors.once = cv.errors
+
+plot(k.values,cv.errors,type="l",xlab="value of k",ylab="cross-validation error",cex.lab=1.5,
+    main="CV errors for K-nearest neighbours",cex.main=2)
+
+
+R = 20
+for (r in 1:R) {
+  for (i in 1:length(k.values)) {
+    cv.errors[i] = cv.knn(X2.female,as.factor(y.f),k=k.values[i],V)
+  }
+  lines(k.values,cv.errors)
+}
+lines(k.values,cv.errors.once,col="red",lwd=3)
+abline(v=15,col=3,lty=3)
+```
+We are interested in comparing kNN with LDA performances based off of CV error percentages.
+```{r, message=F, warning=F,include=F}
+library(MASS)
+
+# The following function does crossvalidation using
+# X - predictor matrix
+# y - class matrix
+# k - value of k in KNN
+# V - number of CV folds
+# seed - (optional) internally sets the seed.
+cv.da = function(X,y,method=c("lda","qda"),V,seed=NA)
+{
+  # Set the seed
+  if (!is.na(seed)) {
+    set.seed(seed)
+  }
+  
+  # Set n
+  n = length(y)
+  
+  # Split the data up into V folds
+  cvSets <- cvFolds(n, V)
+  
+  # Loop through each fold and calculate the error for that fold
+  test.error.da <- c()
+  for (i in 1:V) 
+  {
+    # set the indices corresponding to the training and test sets
+    testInds <- cvSets$subsets[which(cvSets$which==i)]
+    trainInds <- (1:n)[-testInds]
+    
+    # Separate y and X into the training and test sets
+    y.test <- y[testInds]
+    X.test <- X[ testInds,]
+    y.train <- y[trainInds]
+    X.train <- X[trainInds,]
+    
+    # Do classification on ith fold
+    if (method=="lda") {
+      res <- lda(y~., data=X,subset=trainInds)
+    }
+    if (method=="qda") {
+      res <- qda(y~., data=X,subset=trainInds)
+    }
+    results.da = predict(res, X.test)$class
+    
+    # Calcuate the test error for this fold
+    test.error.da[i] <- sum(results.da!=y.test)
+  }
+  
+  # Calculate the mean error over each fold
+  cv.error = sum(test.error.da)/n
+  
+  # Return the results
+  return(cv.error)
+}
+```
+```{r, include = F}
+a=matrix(c(13,"male",0.1138,15,"female",0.09838),ncol=3,byrow = T)
+colnames(a) = c("k","Gender","kNN CV Error")
+b=as.table(a)
+```
+```{r}
+b
+```
+```{r, message=F, warning=F,include=F}
+n=length(y.m)
+X2.male<-data.frame(X2.male)
+res<-lda(y.m~.,data=X2.male,subset=1:n)
+```
+```{r, message=F, warning=F,include=F}
+n=length(y.f)
+X2.female<-data.frame(X2.female)
+res<-lda(y.f~.,data=X2.female,subset=1:n)
+res
+```
+```{r,message=F, warning=F, include=F}
+res.lda.m=cv.da(X2.male,y.m,method="lda",V,seed=1)
+res.lda.m
+
+res.lda.f=cv.da(X2.female,y.f,method="lda",V,seed=1)
+res.lda.f
+```
+```{r,include=F}
+a=matrix(c("Male",0.1138,"Female",0.09838),ncol=2,byrow=T)
+colnames(a)<-c("Gender","LDA CV Error")
+```
+```{r}
+as.table(a)
+```
+The conclusions drawn from LDA are:
+***Males*** \newline
+1. A higher intake of saturated and trans fats lead to a higher probability of high cholesterol. \newline 
+2. A sedentary lifestyle raises chances of high cholesterol levels. We can infer is that individuals who live a highly sedentary lifestyle are also more likely to live off of an unhealthy diet. \newline 
+3. As an individual's BMI goes up, this matches with an increased chance of suffering from high cholesterol.
+
+***Females*** \newline
+1. An increased intake of saturated and trans fats leads to a higher probability of the female suffering from high cholesterol. \newline
+2. As a female's BMI increases, so does their chances of suffering from high cholesterol. 
+
+Furthermore, the CV errors for these are 11.4 percent for males and 9.84 percent for females which are the same percentages derived from choosing the optimal amount of clusters in kNN analysis. However, we would like to draw attention to the counterintuitive sign for the coefficient determining weekly exercise. LDA analysis concludes that an individual, both male and female is more likely to suffer from high cholesterol levels if they exercise more often. Upon raising the issue with the nutrition students, it was posited that high cholesterol status is predominantly controlled by diet and not lifestyle choices or genetics and thus this issue could be disregarded. 
+
+#Dietary trends within unhealthy individuals
+
+##Question Focus: 
+
+The second component of the report draws upon the statistical techniques offered to purely numerical data. The focus of this question is to draw conclusions from Multivariate Linear Regression and Principal Component Analysis in highlighting dietary trends of individuals with low income. We will then attempt to compare their diet with people in higher income brackets. In preparation for the aforementioned analysis, we have taken the liberty with first stratifying the sample by gender. Consecutive stratification by income level is further performed. The second stratification step is quintessential, providing the means for adequately satisfying the normality assumptions underlying the regression analysis. It would like to be stated that it was difficult to normalise all the residuals, even after performing Yeo-Johnson transformations where appropriate on the response variable. 
+
+Collaboration with NUTM students yielded that: \newline 
+1. Daily Fibre Intake (FIBRET1) \newline
+2. Daily Sugar Intake (SUGART1) \newline 
+3. Daily Saturated Fat Intake (SATFATT1) \newline 
+4. Daily Polyunsaturated Fat Intake (PUFATT1) \newline
+5. Daily Monounsaturated Fat Intake (MUFATT1) \newline 
+6. Daily Fruit Intake (FRUIT1N) \newline 
+7. Daily Vegetable and Legume Intake (VEGLEG1N) \newline 
+are important predictor variables in determining state of health.
+
+```{r Stratifying by Gender, then by BMI, include=F, warning=F, message=F}
+#Have replaced BMI measure with Waist Circumference instead
+
+#Retain BMI as the response variable. What we will do instead is stratify by gender first, and then income class. We will attempt to see what the regression tells us after for the overweight and obese classes for both males and females across all 3 income groups. This is a better way to link the second question to question 1 and makes more sense in the context of the general question. 
+
+dat_part2 = dat[,c("BMISC","FIBRET1","SUGART1","SATFATT1","PUFATT1","MUFATT1","FRUIT1N","VEGLEG1N","SEX", "INCDEC")] 
+
+keepr<-which(apply(is.na(dat_part2),1,mean)==0)
+dat_part2 = dat_part2[keepr,]
+
+dat_part2$INCDEC[dat_part1$INCDEC=="2"]<-"1"
+dat_part2$INCDEC[dat_part1$INCDEC=="3"]<-"1"
+dat_part2$INCDEC[dat_part1$INCDEC=="4"]<-"2"
+dat_part2$INCDEC[dat_part1$INCDEC=="5"]<-"2"
+dat_part2$INCDEC[dat_part1$INCDEC=="6"]<-"2"
+dat_part2$INCDEC[dat_part1$INCDEC=="7"]<-"2"
+dat_part2$INCDEC[dat_part1$INCDEC=="8"]<-"3"
+dat_part2$INCDEC[dat_part1$INCDEC=="9"]<-"3"
+dat_part2$INCDEC[dat_part1$INCDEC=="10"]<-"3"
+```
+```{r, warning=F, message=F, include=F}
+#Stratify the sample by Gender
+dat_part2.male<-dat_part2[dat_part2$SEX==1,]
+dat_part2.female<-dat_part2[dat_part2$SEX==2,]
+
+#Stratify by BMI Levels: This step will allow for us to focus only on the overweight and obese people 
+
+dat_part2.male<-dat_part2.male[dat_part2.male$BMISC>=24.9,]
+dat_part2.female<-dat_part2.female[dat_part2.female$BMISC>=24.9,]
+
+```
+```{r, include = F}
+male.poor<-dat_part2.male[dat_part2.male$INCDEC==1,]
+male.middle<-dat_part2.male[dat_part2.male$INCDEC==2,]
+male.rich<-dat_part2.male[dat_part2.male$INCDEC==3,]
+
+female.poor<-dat_part2.female[dat_part2.female$INCDEC==1,]
+female.middle<-dat_part2.female[dat_part2.female$INCDEC==2,]
+female.rich<-dat_part2.female[dat_part2.female$INCDEC==3,]
+```
+```{r,include=F}
+#We have the data for unhealthy (that is overweight or obese) people for males and females across all 3 main income groups. Our wish is to now perform multiply linear regression for these 6 data sets. Let's check out some diagnostics the first being the length of the data that we are working with. 
+dim(male.poor)
+dim(male.middle)
+dim(male.rich)
+
+dim(female.poor)
+dim(female.middle)
+dim(female.rich)
+```
+
+We adopted Green's [@9] rule of thumb for minimum sample size; since we are testing the overall model, each of the data sets having regression performed onto them should have a minimum of 106 observations for an acceptable sample size. The conclusion that we draw is that there are a sufficient amount of data points which can guarantee to some degree, the statistical power desired for this regression for the lowest income class. Unfortunately, we are unable to extend this proposition to the other male classes as their sample size, while larger than the minimum required isn't enough to guarantee strong statistical power. The next step will be to conduct some initial diagnostic plots, to verify that each of the data sets satisfy the assumptions of normality required in order to perform regression. 
+
+```{r, include=F}
+bmi.m.p<-male.poor$BMISC
+fibre.m.p<-male.poor$FIBRET1
+sugar.m.p<-male.poor$SUGART1
+satfat.m.p<-male.poor$SATFATT1
+polyunsatfat.m.p<-male.poor$PUFATT1
+monounsatfat.m.p<-male.poor$MUFATT1
+fruit.m.p<-male.poor$FRUIT1N
+veg.m.p<-male.poor$VEGLEG1N
+
+bmi.m.m<-male.middle$BMISC
+fibre.m.m<-male.middle$FIBRET1
+sugar.m.m<-male.middle$SUGART1
+satfat.m.m<-male.middle$SATFATT1
+polyunsatfat.m.m<-male.middle$PUFATT1
+monounsatfat.m.m<-male.middle$MUFATT1
+fruit.m.m<-male.middle$FRUIT1N
+veg.m.m<-male.middle$VEGLEG1N
+
+bmi.m.r<-male.rich$BMISC
+fibre.m.r<-male.rich$FIBRET1
+sugar.m.r<-male.rich$SUGART1
+satfat.m.r<-male.rich$SATFATT1
+polyunsatfat.m.r<-male.rich$PUFATT1
+monounsatfat.m.r<-male.rich$MUFATT1
+fruit.m.r<-male.rich$FRUIT1N
+veg.m.r<-male.rich$VEGLEG1N
+
+bmi.f.p<-female.poor$BMISC
+fibre.f.p<-female.poor$FIBRET1
+sugar.f.p<-female.poor$SUGART1
+satfat.f.p<-female.poor$SATFATT1
+polyunsatfat.f.p<-female.poor$PUFATT1
+monounsatfat.f.p<-female.poor$MUFATT1
+fruit.f.p<-female.poor$FRUIT1N
+veg.f.p<-female.poor$VEGLEG1N
+
+bmi.f.m<-female.middle$BMISC
+fibre.f.m<-female.middle$FIBRET1
+sugar.f.m<-female.middle$SUGART1
+satfat.f.m<-female.middle$SATFATT1
+polyunsatfat.f.m<-female.middle$PUFATT1
+monounsatfat.f.m<-female.middle$MUFATT1
+fruit.f.m<-female.middle$FRUIT1N
+veg.f.m<-female.middle$VEGLEG1N
+
+bmi.f.r<-female.rich$BMISC
+fibre.f.r<-female.rich$FIBRET1
+sugar.f.r<-female.rich$SUGART1
+satfat.f.r<-female.rich$SATFATT1
+polyunsatfat.f.r<-female.rich$PUFATT1
+monounsatfat.f.r<-female.rich$MUFATT1
+fruit.f.r<-female.rich$FRUIT1N
+veg.f.r<-female.rich$VEGLEG1N
+```
+
+```{r, include =F}
+lm.m.p<-lm(bmi.m.p~1+fibre.m.p+sugar.m.p+satfat.m.p+polyunsatfat.m.p+monounsatfat.m.p+fruit.m.p+veg.m.p,data=male.poor)
+lm.m.p$coef
+par(mfrow=c(2,2))
+boxplot(lm.m.p$residuals)
+shapiro.test(lm.m.p$residuals)
+library(ggpubr)
+ggqqplot(lm.m.p$residuals)
+```
+
+```{r, YJ Transformation of Poor Male BMI,include=F}
+library(MASS)
+library(car)
+lambdavalues<-boxcox(lm.m.p, family="yjPower",plotit=TRUE)
+#Below is the line of code giving me the value of lambda which maximises the likelihood function
+maxlambdall<-lambdavalues$x[lambdavalues$y==max(lambdavalues$y)]
+
+#Use the value of lambda obtained to transform the BMI variable
+bmi.m.pt <- yjPower(bmi.m.p, maxlambdall)
+#Refit the linear model again. 
+lm.m.pt<-lm(bmi.m.pt~1+fibre.m.p+sugar.m.p+satfat.m.p+polyunsatfat.m.p+monounsatfat.m.p+fruit.m.p+veg.m.p,data=male.poor)
+
+lm.m.pt$coefficients
+library(ggpubr)
+ggqqplot(lm.m.pt$residuals)
+shapiro.test(lm.m.pt$residuals)
+par(mfrow=c(2,2))
+boxplot(lm.m.pt$residuals)
+plot(lm.m.pt,which=1:3)
+```
+
+```{r}
+#Residual Test for Non-transformed Dataset
+shapiro.test(lm.m.p$residuals)
+```
+
+```{r, echo=F}
+library(huxtable)
+library(kableExtra)
+ht <- hux(
+        Coefficients = c('Intercept','Fibre', 'Sugar', 'Sat Fat', 'Polyunsat Fat', 'Monounsat Fat', 'Fruit', 'Veg'),
+        Normal = lm.m.p$coefficients,
+        Transformed = lm.m.pt$coefficients,
+        add_colnames = TRUE
+      )
+
+bold(ht)[1,]           <- TRUE
+bottom_border(ht)[1,]  <- 1
+align(ht)[,2]          <- 'right'
+right_padding(ht)      <- 10
+left_padding(ht)       <- 10
+width(ht)              <- 0.35
+```
+
+```{r, echo=F}
+ht
+```
+
+```{r, echo=F}
+library(ggpubr)
+library(gridExtra)
+grid.arrange(ggqqplot(lm.m.p$residuals), ggqqplot(lm.m.pt$residuals), nrow=1, ncol=2)
+```
+The qq-plot and Shapiro-Wilk's normality test clearly indicate that the residuals do not satisfy normality. A solution is the implementation of a Yeo-Johnson transformation onto the response variable BMISC in an attempt to centre most of the residuals. It can not be guaranteed that the transformation will be able to cater for the extreme residuals, but we shall proceeed anyway. We note that the Yeo-Johnson transformation does an effective job at normalising the residuals at the upper tail region but is lacking with the lower tailed residuals. More importantly, a male within a lower socioeconomic bracket suffers from decreased fibre and fruit consumption and an increase in saturated fat intake and sugar. Possible reasons include these foods being more affordable and energy dense options that are nutritionally deficient. Being in a lower SES bracket, the individual's choices would be predominantly spearheaded by costs and familiarity thus leading to a fibre-lacking diet. 
+
+```{r, include =F}
+lm.f.p<-lm(bmi.f.p~1+fibre.f.p+sugar.f.p+satfat.f.p+polyunsatfat.f.p+monounsatfat.f.p+fruit.f.p+veg.f.p,data=female.poor)
+
+summary(lm.f.p)
+
+par(mfrow=c(2,2))
+boxplot(lm.f.p$residuals)
+shapiro.test(lm.f.p$residuals)
+library(ggpubr)
+ggqqplot(lm.f.p$residuals)
+```
+```{r, include=F}
+library(MASS)
+library(car)
+lambdavalues<-boxcox(lm.f.p, family="yjPower",plotit=TRUE)
+#Below is the line of code giving me the value of lambda which maximises the likelihood function
+maxlambdall<-lambdavalues$x[lambdavalues$y==max(lambdavalues$y)]
+
+maxlambdall
+
+#Use the value of lambda obtained to transform the BMI variable
+bmi.f.pt <- yjPower(bmi.f.p, maxlambdall)
+
+#Refit the linear model again. 
+lm.f.pt<-lm(bmi.f.pt~1+fibre.f.p+sugar.f.p+satfat.f.p+polyunsatfat.f.p+monounsatfat.f.p+fruit.f.p+veg.f.p,data=female.poor)
+
+summary(lm.f.pt)
+library(ggpubr)
+ggqqplot(lm.f.pt$residuals)
+shapiro.test(lm.f.pt$residuals)
+par(mfrow=c(2,2))
+#boxplot(lm.f.pt$residuals)
+#plot(lm.f.pt,which=1:3)
+```
+```{r, include=F}
+lm.f.m<-lm(bmi.f.m~1+fibre.f.m+sugar.f.m+satfat.f.m+polyunsatfat.f.m+monounsatfat.f.m+fruit.f.m+veg.f.m,data=female.middle)
+
+summary(lm.f.m)
+
+par(mfrow=c(2,2))
+boxplot(lm.f.m$residuals)
+shapiro.test(lm.f.m$residuals)
+library(ggpubr)
+ggqqplot(lm.f.m$residuals)
+```
+```{r, include=F}
+library(MASS)
+library(car)
+lambdavalues<-boxcox(lm.f.m, family="yjPower",plotit=TRUE)
+#Below is the line of code giving me the value of lambda which maximises the likelihood function
+maxlambdall<-lambdavalues$x[lambdavalues$y==max(lambdavalues$y)]
+
+maxlambdall
+
+#Use the value of lambda obtained to transform the BMI variable
+bmi.f.mt <- yjPower(bmi.f.m, maxlambdall)
+
+#Refit the linear model again. 
+lm.f.mt<-lm(bmi.f.mt~1+fibre.f.m+sugar.f.m+satfat.f.m+polyunsatfat.f.m+monounsatfat.f.m+fruit.f.m+veg.f.m,data=female.middle)
+
+summary(lm.f.mt)
+library(ggpubr)
+ggqqplot(lm.f.mt$residuals)
+shapiro.test(lm.f.mt$residuals)
+par(mfrow=c(2,2))
+#boxplot(lm.f.m$residuals)
+#plot(lm.f.m,which=1:3)
+```
+```{r, include=F}
+lm.f.r<-lm(bmi.f.r~1+fibre.f.r+sugar.f.r+satfat.f.r+polyunsatfat.f.r+monounsatfat.f.r+fruit.f.r+veg.f.r,data=female.rich)
+
+summary(lm.f.r)
+
+par(mfrow=c(2,2))
+boxplot(lm.f.r$residuals)
+shapiro.test(lm.f.r$residuals)
+library(ggpubr)
+ggqqplot(lm.f.r$residuals)
+```
+```{r, include=F}
+library(MASS)
+library(car)
+lambdavalues<-boxcox(lm.f.r, family="yjPower",plotit=TRUE)
+#Below is the line of code giving me the value of lambda which maximises the likelihood function
+maxlambdall<-lambdavalues$x[lambdavalues$y==max(lambdavalues$y)]
+
+maxlambdall
+
+#Use the value of lambda obtained to transform the BMI variable
+bmi.f.rt <- yjPower(bmi.f.r, maxlambdall)
+
+#Refit the linear model again. 
+lm.f.rt<-lm(bmi.f.rt~1+fibre.f.r+sugar.f.r+satfat.f.r+polyunsatfat.f.r+monounsatfat.f.r+fruit.f.r+veg.f.r,data=female.rich)
+
+summary(lm.f.rt)
+library(ggpubr)
+ggqqplot(lm.f.rt$residuals)
+shapiro.test(lm.f.rt$residuals)
+par(mfrow=c(2,2))
+#boxplot(lm.f.rt$residuals)
+#plot(lm.f.rt,which=1:3)
+```
+```{r,include=F}
+library(huxtable)
+library(kableExtra)
+ht.f.p <- hux(
+        Coefficients = c('Intercept','Fibre', 'Sugar', 'Sat Fat', 'Polyunsat Fat', 'Monounsat Fat', 'Fruit', 'Veg'),
+        Normal = lm.f.p$coefficients,
+        Transformed = lm.f.pt$coefficients,
+        add_colnames = TRUE
+      )
+
+bold(ht.f.p)[1,]           <- TRUE
+bottom_border(ht.f.p)[1,]  <- 1
+align(ht.f.p)[,2]          <- 'right'
+right_padding(ht.f.p)      <- 10
+left_padding(ht.f.p)       <- 10
+width(ht.f.p)              <- 0.35
+```
+```{r,include=F}
+library(huxtable)
+library(kableExtra)
+ht.f.m <- hux(
+        Coefficients = c('Intercept','Fibre', 'Sugar', 'Sat Fat', 'Polyunsat Fat', 'Monounsat Fat', 'Fruit', 'Veg'),
+        Normal = lm.f.m$coefficients,
+        Transformed = lm.f.mt$coefficients,
+        add_colnames = TRUE
+      )
+
+bold(ht.f.m)[1,]           <- TRUE
+bottom_border(ht.f.m)[1,]  <- 1
+align(ht.f.m)[,2]          <- 'right'
+right_padding(ht.f.m)      <- 10
+left_padding(ht.f.m)       <- 10
+width(ht.f.m)              <- 0.35
+```
+```{r,include=F}
+library(huxtable)
+library(kableExtra)
+ht.f.r <- hux(
+        Coefficients = c('Intercept','Fibre', 'Sugar', 'Sat Fat', 'Polyunsat Fat', 'Monounsat Fat', 'Fruit', 'Veg'),
+        Normal = lm.f.r$coefficients,
+        Transformed = lm.f.rt$coefficients,
+        add_colnames = TRUE
+      )
+
+bold(ht.f.r)[1,]           <- TRUE
+bottom_border(ht.f.r)[1,]  <- 1
+align(ht.f.r)[,2]          <- 'right'
+right_padding(ht.f.r)      <- 10
+left_padding(ht.f.r)       <- 10
+width(ht.f.r)              <- 0.35
+```
+```{r, include=F}
+library(huxtable)
+library(kableExtra)
+shapiro.table <- hux(
+        Shapiro.p.Value = c('Females: Lowest Income Class','Females: Middle Income Class','Females: Highest Income Class'),
+        Normal = c(shapiro.test(lm.f.p$residuals)$p.value,shapiro.test(lm.f.m$residuals)$p.value,shapiro.test(lm.f.r$residuals)$p.value),
+        Transformed = c(shapiro.test(lm.f.pt$residuals)$p.value,shapiro.test(lm.f.mt$residuals)$p.value,shapiro.test(lm.f.rt$residuals)$p.value),
+        add_colnames = TRUE
+      )
+
+bold(shapiro.table)[1,]           <- TRUE
+bottom_border(shapiro.table)[1,]  <- 1
+align(shapiro.table)[,2]          <- 'right'
+right_padding(shapiro.table)      <- 10
+left_padding(shapiro.table)       <- 10
+width(shapiro.table)              <- 0.35
+```
+```{r, echo=F}
+shapiro.table
+```
+
+```{r, echo=FALSE}
+library(ggpubr)
+library(gridExtra)
+grid.arrange(ggqqplot(lm.f.p$residuals), ggqqplot(lm.f.pt$residuals),ggqqplot(lm.f.m$residuals), ggqqplot(lm.f.mt$residuals),ggqqplot(lm.f.r$residuals), ggqqplot(lm.f.rt$residuals), nrow=3, ncol=2)
+```
+
+```{r, echo=F}
+ht.f.p
+ht.f.m
+ht.f.r
+```
+Unhealthy females in the lowest income class are characterised by their lower fibre consumptions and increased sugar consumption. They are more likely to fail to meet the recommended daily fruit and vegetable intake criteria. 
+
+Females belonging to the middle and higest income classes share some of the same characteristics with women in the lowest income class. These are manifested in the form of fibre levels, which are lower in all income classes as one becomes heavier and consequentially more unhealthy. Furthermore, fruit intake drops matched with a higher sugar intake. Some causes may include the recent surge of fruit juice as a replacement for whole fruit. These juices are mostly reconstituted and thus lack the necessary fibre required in a healthy diet. We will now attempt to portray some correlation plots for the variables of interest in this research section. 
+
+```{r, Correlation Plots, echo=FALSE}
+
+par(mfrow=c(2,2))
+#Load the corrplot package into R. We are now interested in making a nice looking correlation plot for the data that we have prepared above. 
+library(corrplot)
+cc.m.p=cor(male.poor[,c(1:8)])
+#We choose to present the information in two ways. One is through the use of circles and the other method is through the use of numbers. 
+corrplot(cc.m.p, method="circle")
+
+cc.f.p=cor(female.poor[,c(1:8)])
+#We choose to present the information in two ways. One is through the use of circles and the other method is through the use of numbers. 
+corrplot(cc.f.p, method="circle")
+
+cc.f.m=cor(female.middle[,c(1:8)])
+#We choose to present the information in two ways. One is through the use of circles and the other method is through the use of numbers. 
+corrplot(cc.f.m, method="circle")
+
+cc.f.r=cor(female.rich[,c(1:8)])
+#We choose to present the information in two ways. One is through the use of circles and the other method is through the use of numbers. 
+corrplot(cc.f.r, method="circle")
+
+
+```
+
+#Fibre and other factors in ensuring good health
+
+##Question Focus:
+This final section attempts to investigate whether increasing fibre intake decreases the chance for an individual to develop diseases such as hypertension, high cholesterol levels or high blood sugar levels. We make links to the core question by paying particular attention to the trends of fibre across the 3 income levels. We have chosen CART as the classifier for this section and will attempt to classify whether an individual suffers from the aforementioned diseases. Following the same reasons in the previous question, we omit the analysis for Males in Middle and Upper Income Levels due to the lack of observations which decreases statistical power. 
+
+###High Cholesterol
+```{r, include=F}
+#Prepare data for CART Fit
+dat_chol = dat[,c("BMISC","FIBRET1","SEX", "SATPER1", "EXLWTBC", "HCHOLBC", "INCDEC")]
+keepr<-which(apply(is.na(dat_chol),1,mean)==0)
+dat_chol = dat_chol[keepr,]
+
+#Condense Income into 3 categories
+dat_chol$INCDEC[dat_chol$INCDEC=="2"]<-"1"
+dat_chol$INCDEC[dat_chol$INCDEC=="3"]<-"1"
+dat_chol$INCDEC[dat_chol$INCDEC=="4"]<-"2"
+dat_chol$INCDEC[dat_chol$INCDEC=="5"]<-"2"
+dat_chol$INCDEC[dat_chol$INCDEC=="6"]<-"2"
+dat_chol$INCDEC[dat_chol$INCDEC=="7"]<-"2"
+dat_chol$INCDEC[dat_chol$INCDEC=="8"]<-"3"
+dat_chol$INCDEC[dat_chol$INCDEC=="9"]<-"3"
+dat_chol$INCDEC[dat_chol$INCDEC=="10"]<-"3"
+dat_chol$INCDEC<-factor(dat_chol$INCDEC)
+
+#Condense HCHOLBC into binary response (Y/N)
+dat_chol$HCHOLBC[dat_chol$HCHOLBC=="2"]<-"1"
+dat_chol$HCHOLBC[dat_chol$HCHOLBC=="5"]<-"2"
+dat_chol$HCHOLBC<-factor(dat_chol$HCHOLBC)
+
+#Split into Male and Female
+dat_chol.m<-dat_chol[dat_chol$SEX==1,]
+dat_chol.f<-dat_chol[dat_chol$SEX==2,]
+
+#Classify into Income Categories
+dat_chol.m1<-dat_chol.m[dat_chol$INCDEC==1,]
+dat_chol.m2<-dat_chol.m[dat_chol$INCDEC==2,]
+dat_chol.m3<-dat_chol.m[dat_chol$INCDEC==3,]
+
+dat_chol.f1<-dat_chol.f[dat_chol$INCDEC==1,]
+dat_chol.f2<-dat_chol.f[dat_chol$INCDEC==2,]
+dat_chol.f3<-dat_chol.f[dat_chol$INCDEC==3,]
+
+#Delete the unused factors INCDEC and SEX
+dat_chol.m1<-dat_chol.m1[,-c(3,7)]
+dat_chol.m2<-dat_chol.m2[,-c(3,7)]
+dat_chol.m3<-dat_chol.m3[,-c(3,7)]
+dat_chol.f1<-dat_chol.f1[,-c(3,7)]
+dat_chol.f2<-dat_chol.f2[,-c(3,7)]
+dat_chol.f3<-dat_chol.f3[,-c(3,7)]
+```
+
+```{r CART Poor Males Cholesterol, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_chol.m1<-na.omit(dat_chol.m1)
+res.rpart <- rpart(HCHOLBC ~ ., data=dat_chol.m1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart,type=2,extra=1,tweak=2, main="CART Fit: Male (Low Income)",cex.main=2)
+```
+
+```{r CART Middle Males Cholesterol,echo=F, eval=F}
+library(rpart)
+library(rpart.plot)
+dat_chol.m2<-na.omit(dat_chol.m2)
+res.rpart2 <- rpart(HCHOLBC ~ ., data=dat_chol.m2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart2,type=2,extra=1,tweak=1.5, main="CART Fit: Male (Average Income)",cex.main=2)
+```
+
+```{r CART Rich Males Cholesterol,echo=F,eval=F}
+library(rpart)
+library(rpart.plot)
+dat_chol.m3<-na.omit(dat_chol.m3)
+res.rpart3 <- rpart(HCHOLBC ~ ., data=dat_chol.m3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart3,type=2,extra=1,tweak=1.7, main="CART Fit: Male (High Income)",cex.main=2)
+```
+
+```{r CART Poor Females Cholesterol, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_chol.f1<-na.omit(dat_chol.f1)
+res.rpart4 <- rpart(HCHOLBC ~ ., data=dat_chol.f1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart4,type=2,extra=1,tweak=1, main="CART Fit: Female (Low Income)",cex.main=2)
+```
+
+```{r, CART Middle Females Cholesterol, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_chol.f2<-na.omit(dat_chol.f2)
+res.rpart5 <- rpart(HCHOLBC ~ ., data=dat_chol.f2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart5,type=2,extra=1,tweak=1, main="CART Fit: Female (Average Income)",cex.main=2)
+```
+
+```{r, CART Rich Females Cholesterol, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_chol.f3<-na.omit(dat_chol.f3)
+res.rpart6 <- rpart(HCHOLBC ~ ., data=dat_chol.f3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart6,type=2,extra=1,tweak=1, main="CART Fit: Female (High Income)",cex.main=2)
+```
+
+```{r,echo=FALSE,message=F, warning=F, include=F}
+# The following function does cross-validation using
+# X - predictor matrix
+# y - class matrix
+# V - number of CV folds
+# seed - (optional) internally sets the seed.
+cv.rpart = function(X,y,V,seed=NA)
+{
+  # Set the seed
+  if (!is.na(seed)) {
+    set.seed(seed)
+  }
+  
+  # Set n
+  n = length(y)
+  
+  # Split the data up into V folds
+  cvSets <- cvFolds(n, V)
+  
+  # Loop through each fold and calculate the error for that fold
+  test.error <- c()
+  for (i in 1:V) 
+  {
+    # set the indices corresponding to the training and test sets
+    testInds <- cvSets$subsets[which(cvSets$which==i)]
+    trainInds <- (1:n)[-testInds]
+    
+    X = data.frame(X)
+    
+    # Separate y and X into the training and test sets
+    y.test <- y[testInds]
+    X.test <- X[ testInds,]
+    y.train <- y[trainInds]
+    X.train <- X[trainInds,]
+  
+    # Do classification on ith fold
+    res.rpart <- rpart(as.factor(y.train) ~., data=X.train)
+    res = predict(res.rpart, newdata=X.test, type = "class")
+    
+    # Calcuate the test error for this fold
+    test.error[i] <- sum(res!=y.test)
+  }
+  
+  # Calculate the mean error over each fold
+  cv.error = sum(test.error)/n
+  
+  # Return the results
+  return(cv.error)
+}
+```
+
+```{r, CV Errors for CART FIT Cholesterol, echo=TRUE, include=F}
+V=10
+
+X.m1<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.m1)
+y.m1<-dat_chol.m1$HCHOLBC
+
+X.m2<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.m2)
+y.m2<-dat_chol.m2$HCHOLBC
+
+X.m3<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.m3)
+y.m3<-dat_chol.m3$HCHOLBC
+
+X.f1<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.f1)
+y.f1<-dat_chol.f1$HCHOLBC
+
+X.f2<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.f2)
+y.f2<-dat_chol.f2$HCHOLBC
+
+X.f3<-model.matrix(~-1+BMISC+FIBRET1+SATPER1+EXLWTBC,data=dat_chol.f3)
+y.f3<-dat_chol.f3$HCHOLBC
+
+res.rpart = cv.rpart(X.m1,y.m1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m2,y.m2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m3,y.m3,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f1,y.f1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f2,y.f2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f3,y.f3,V,seed=1)
+res.rpart
+```
+####Meaningful Conclusions from High Cholesterol CART Analysis
+The above classification has the following interpretation
+For males with low income, if the energy from saturated fat is less than 19, physical activity time is less than 63, saturated fat is greater than 13 and fibre intake is greater than 12 then you would have a low cholesterol level(24 cases), otherwise not.
+
+For males with average income level ,if BMI level less than 27,physical activity time less than 5,energy from saturated fat is greater than 8 ,fibre lever is greater than 29, then you would have a low cholesterol level(20 cases), but under this condition if fibre level gets lower than 20, then you get a high cholesterol level. So we may suggest fibre plays a role for cholesterol in middle income level.
+
+For Males with high income, if BMI level is less than 29 and greater than 22, fibre intake is greater than 11, then you get a low cholesterol level(43 cases). 
+On the other hand, if BMI level is greater than 29, fibre intake greater than 19 and greater than 34, then you get a low cholesterol level(54 cases). We may conclude in the high income level, higher fibre intake relates to lower cholesterol levels.
+
+For Females with low income, BMI level greater than 29, physical activity less than 18 and fibre intake greater than 15, then you get a low cholesterol level(44 cases). 
+
+For Females with average income, BMI level greater than 33 and fibre intake greater than 14, then you get a low cholesterol level(63 cases). This seems similar to the result we get from low income level. 
+
+For Females with high income, BMI level greater than 25, physical activity greater than 23 and fibre intake greater than 32, then you get a low cholesterol level(41 cases). We still get similar results, so higher fibre intake gives lower cholesterol levels in Females. 
+
+###High Blood Sugar Levels
+```{r, include=F}
+#Prepare data for CART Fit
+dat_sug = dat[,c("BMISC","FIBRET1","SEX", "AGEC", "EXLWTBC", "HSUGBC", "INCDEC", "DIASTOL")]
+keepr<-which(apply(is.na(dat_sug),1,mean)==0)
+dat_sug = dat_sug[keepr,]
+
+#Condense Income into 3 categories
+dat_sug$INCDEC[dat_sug$INCDEC=="2"]<-"1"
+dat_sug$INCDEC[dat_sug$INCDEC=="3"]<-"1"
+dat_sug$INCDEC[dat_sug$INCDEC=="4"]<-"2"
+dat_sug$INCDEC[dat_sug$INCDEC=="5"]<-"2"
+dat_sug$INCDEC[dat_sug$INCDEC=="6"]<-"2"
+dat_sug$INCDEC[dat_sug$INCDEC=="7"]<-"2"
+dat_sug$INCDEC[dat_sug$INCDEC=="8"]<-"3"
+dat_sug$INCDEC[dat_sug$INCDEC=="9"]<-"3"
+dat_sug$INCDEC[dat_sug$INCDEC=="10"]<-"3"
+dat_sug$INCDEC<-factor(dat_sug$INCDEC)
+
+#Condense HCHOLBC into binary response (Y/N)
+dat_sug$HSUGBC[dat_sug$HSUGBC=="2"]<-"1"
+dat_sug$HSUGBC[dat_sug$HSUGBC=="5"]<-"2"
+dat_sug$HSUGBC<-factor(dat_sug$HSUGBC)
+
+#Split into Male and Female
+dat_sug.m<-dat_sug[dat_sug$SEX==1,]
+dat_sug.f<-dat_sug[dat_sug$SEX==2,]
+
+#Classify into Income Categories
+dat_sug.m1<-dat_sug.m[dat_sug$INCDEC==1,]
+dat_sug.m2<-dat_sug.m[dat_sug$INCDEC==2,]
+dat_sug.m3<-dat_sug.m[dat_sug$INCDEC==3,]
+
+dat_sug.f1<-dat_sug.f[dat_sug$INCDEC==1,]
+dat_sug.f2<-dat_sug.f[dat_sug$INCDEC==2,]
+dat_sug.f3<-dat_sug.f[dat_sug$INCDEC==3,]
+
+#Delete the unused factors INCDEC and SEX
+dat_sug.m1<-dat_sug.m1[,-c(3,7)]
+dat_sug.m2<-dat_sug.m2[,-c(3,7)]
+dat_sug.m3<-dat_sug.m3[,-c(3,7)]
+dat_sug.f1<-dat_sug.f1[,-c(3,7)]
+dat_sug.f2<-dat_sug.f2[,-c(3,7)]
+dat_sug.f3<-dat_sug.f3[,-c(3,7)]
+```
+
+```{r, CART Poor Males Sugar, include=F}
+library(rpart)
+library(rpart.plot)
+dat_sug.m1<-na.omit(dat_sug.m1)
+res.rpart <- rpart(HSUGBC ~ ., data=dat_sug.m1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart,type=2,extra=1,tweak=3, main="CART Fit: Male (Low Income)",cex.main=2)
+```
+
+```{r, CART Middle Males Sugar, include=F}
+library(rpart)
+library(rpart.plot)
+dat_sug.m2<-na.omit(dat_sug.m2)
+res.rpart2 <- rpart(HSUGBC ~ ., data=dat_sug.m2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart2,type=2,extra=1,tweak=1.5, main="CART Fit: Male (Average Income)",cex.main=2)
+```
+
+```{r, CART Rich Males Sugar, include=F}
+library(rpart)
+library(rpart.plot)
+dat_sug.m3<-na.omit(dat_sug.m3)
+res.rpart3 <- rpart(HSUGBC ~ ., data=dat_sug.m3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart3,type=2,extra=1,tweak=1.7, main="CART Fit: Male (High Income)",cex.main=2)
+```
+
+```{r, CART Poor Female Sugar, include=F}
+library(rpart)
+library(rpart.plot)
+dat_sug.f1<-na.omit(dat_sug.f1)
+res.rpart4 <- rpart(HSUGBC ~ ., data=dat_sug.f1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart4,type=2,extra=1,tweak=1, main="CART Fit: Female (Low Income)",cex.main=2)
+```
+
+```{r, CART Middle Female Sugar, include=F }
+library(rpart)
+library(rpart.plot)
+dat_sug.f2<-na.omit(dat_sug.f2)
+res.rpart5 <- rpart(HSUGBC ~ ., data=dat_sug.f2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart5,type=2,extra=1,tweak=1, main="CART Fit: Female (Average Income)",cex.main=2)
+```
+
+```{r, CART Rich Females Sugar, include=F}
+library(rpart)
+library(rpart.plot)
+dat_sug.f3<-na.omit(dat_sug.f3)
+res.rpart6 <- rpart(HSUGBC ~ ., data=dat_sug.f3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart6,type=2,extra=1,tweak=1, main="CART Fit: Female (High Income)",cex.main=2)
+```
+
+```{r,echo=FALSE,message=F, warning=F}
+# The following function does cross-validation using
+# X - predictor matrix
+# y - class matrix
+# V - number of CV folds
+# seed - (optional) internally sets the seed.
+cv.rpart = function(X,y,V,seed=NA)
+{
+  # Set the seed
+  if (!is.na(seed)) {
+    set.seed(seed)
+  }
+  
+  # Set n
+  n = length(y)
+  
+  # Split the data up into V folds
+  cvSets <- cvFolds(n, V)
+  
+  # Loop through each fold and calculate the error for that fold
+  test.error <- c()
+  for (i in 1:V) 
+  {
+    # set the indices corresponding to the training and test sets
+    testInds <- cvSets$subsets[which(cvSets$which==i)]
+    trainInds <- (1:n)[-testInds]
+    
+    X = data.frame(X)
+    
+    # Separate y and X into the training and test sets
+    y.test <- y[testInds]
+    X.test <- X[ testInds,]
+    y.train <- y[trainInds]
+    X.train <- X[trainInds,]
+  
+    # Do classification on ith fold
+    res.rpart <- rpart(as.factor(y.train) ~., data=X.train)
+    res = predict(res.rpart, newdata=X.test, type = "class")
+    
+    # Calcuate the test error for this fold
+    test.error[i] <- sum(res!=y.test)
+  }
+  
+  # Calculate the mean error over each fold
+  cv.error = sum(test.error)/n
+  
+  # Return the results
+  return(cv.error)
+}
+```
+
+```{r, CV Errors for CART FIT HSUGBC, echo=TRUE, include=F}
+V=10
+
+X.m1<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.m1)
+y.m1<-dat_sug.m1$HSUGBC
+
+X.m2<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.m2)
+y.m2<-dat_sug.m2$HSUGBC
+
+X.m3<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.m3)
+y.m3<-dat_sug.m3$HSUGBC
+
+X.f1<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.f1)
+y.f1<-dat_sug.f1$HSUGBC
+
+X.f2<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.f2)
+y.f2<-dat_sug.f2$HSUGBC
+
+X.f3<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_sug.f3)
+y.f3<-dat_sug.f3$HSUGBC
+
+res.rpart = cv.rpart(X.m1,y.m1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m2,y.m2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m3,y.m3,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f1,y.f1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f2,y.f2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f3,y.f3,V,seed=1)
+res.rpart
+```
+
+The classification tree for blood sugar levels possesses very low CV errors. This makes sense as from the data, there is an overwhelmingly negative response to testing positive for high blood sugar levels. Taking this into account, the classifier naturally selects option 2 ("No") all the time, resulting in the single node present for males and females across all three income classes. 
+
+###Hypertension
+```{r, include=F}
+#Prepare data for CART Fit
+dat_hyp = dat[,c("BMISC","FIBRET1","SEX", "AGEC", "EXLWTBC", "HYPBC", "INCDEC", "DIASTOL")]
+keepr<-which(apply(is.na(dat_hyp),1,mean)==0)
+dat_hyp = dat_hyp[keepr,]
+
+#Condense Income into 3 categories
+dat_hyp$INCDEC[dat_hyp$INCDEC=="2"]<-"1"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="3"]<-"1"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="4"]<-"2"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="5"]<-"2"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="6"]<-"2"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="7"]<-"2"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="8"]<-"3"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="9"]<-"3"
+dat_hyp$INCDEC[dat_hyp$INCDEC=="10"]<-"3"
+dat_hyp$INCDEC<-factor(dat_hyp$INCDEC)
+
+#Condense HYPBC into binary response (Y/N)
+dat_hyp$HYPBC[dat_hyp$HYPBC=="2"]<-"1"
+dat_hyp$HYPBC[dat_hyp$HYPBC=="5"]<-"2"
+dat_hyp$HYPBC<-factor(dat_hyp$HYPBC)
+
+#Split into Male and Female
+dat_hyp.m<-dat_hyp[dat_hyp$SEX==1,]
+dat_hyp.f<-dat_hyp[dat_hyp$SEX==2,]
+
+#Classify into Income Categories
+dat_hyp.m1<-dat_hyp.m[dat_hyp$INCDEC==1,]
+dat_hyp.m2<-dat_hyp.m[dat_hyp$INCDEC==2,]
+dat_hyp.m3<-dat_hyp.m[dat_hyp$INCDEC==3,]
+
+dat_hyp.f1<-dat_hyp.f[dat_hyp$INCDEC==1,]
+dat_hyp.f2<-dat_hyp.f[dat_hyp$INCDEC==2,]
+dat_hyp.f3<-dat_hyp.f[dat_hyp$INCDEC==3,]
+
+#Delete the unused factors INCDEC and SEX
+dat_hyp.m1<-dat_hyp.m1[,-c(3,7)]
+dat_hyp.m2<-dat_hyp.m2[,-c(3,7)]
+dat_hyp.m3<-dat_hyp.m3[,-c(3,7)]
+dat_hyp.f1<-dat_hyp.f1[,-c(3,7)]
+dat_hyp.f2<-dat_hyp.f2[,-c(3,7)]
+dat_hyp.f3<-dat_hyp.f3[,-c(3,7)]
+```
+
+```{r, CART Poor Males Hypertension, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_hyp.m1<-na.omit(dat_hyp.m1)
+res.rpart <- rpart(HYPBC ~ ., data=dat_hyp.m1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart,type=2,extra=1,tweak=1.5, main="CART Fit: Male (Low Income)",cex.main=2)
+```
+
+```{r, CART Middle Males Hypertension, include=F}
+library(rpart)
+library(rpart.plot)
+dat_hyp.m2<-na.omit(dat_hyp.m2)
+res.rpart2 <- rpart(HYPBC ~ ., data=dat_hyp.m2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart2,type=2,extra=1,tweak=1.5, main="CART Fit: Male (Average Income)",cex.main=2)
+```
+
+```{r, CART Rich Males Hypertension, include=F}
+library(rpart)
+library(rpart.plot)
+dat_hyp.m3<-na.omit(dat_hyp.m3)
+res.rpart3 <- rpart(HYPBC ~ ., data=dat_hyp.m3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart3,type=2,extra=1,tweak=1.7, main="CART Fit: Male (High Income)",cex.main=2)
+```
+
+```{r, CART Poor Female Hypertension, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_hyp.f1<-na.omit(dat_hyp.f1)
+res.rpart4 <- rpart(HYPBC ~ ., data=dat_hyp.f1, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart4,type=2,extra=1,tweak=1, main="CART Fit: Female (Low Income)",cex.main=2)
+```
+
+```{r, CART Middle Female Hypertension, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_hyp.f2<-na.omit(dat_hyp.f2)
+res.rpart5 <- rpart(HYPBC ~ ., data=dat_hyp.f2, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart5,type=2,extra=1,tweak=1.5, main="CART Fit: Female (Average Income)",cex.main=2)
+```
+
+```{r, CART Rich Females Hypertension, echo=FALSE}
+library(rpart)
+library(rpart.plot)
+dat_hyp.f3<-na.omit(dat_hyp.f3)
+res.rpart6 <- rpart(HYPBC ~ ., data=dat_hyp.f3, control=rpart.control(cp=0.0001))
+
+rpart.plot(res.rpart6,type=2,extra=1,tweak=1, main="CART Fit: Female (High Income)",cex.main=2)
+```
+
+```{r,echo=F,message=F, warning=F}
+# The following function does cross-validation using
+# X - predictor matrix
+# y - class matrix
+# V - number of CV folds
+# seed - (optional) internally sets the seed.
+cv.rpart = function(X,y,V,seed=NA)
+{
+  # Set the seed
+  if (!is.na(seed)) {
+    set.seed(seed)
+  }
+  
+  # Set n
+  n = length(y)
+  
+  # Split the data up into V folds
+  cvSets <- cvFolds(n, V)
+  
+  # Loop through each fold and calculate the error for that fold
+  test.error <- c()
+  for (i in 1:V) 
+  {
+    # set the indices corresponding to the training and test sets
+    testInds <- cvSets$subsets[which(cvSets$which==i)]
+    trainInds <- (1:n)[-testInds]
+    
+    X = data.frame(X)
+    
+    # Separate y and X into the training and test sets
+    y.test <- y[testInds]
+    X.test <- X[ testInds,]
+    y.train <- y[trainInds]
+    X.train <- X[trainInds,]
+  
+    # Do classification on ith fold
+    res.rpart <- rpart(as.factor(y.train) ~., data=X.train)
+    res = predict(res.rpart, newdata=X.test, type = "class")
+    
+    # Calcuate the test error for this fold
+    test.error[i] <- sum(res!=y.test)
+  }
+  
+  # Calculate the mean error over each fold
+  cv.error = sum(test.error)/n
+  
+  # Return the results
+  return(cv.error)
+}
+```
+
+```{r, CV Errors for CART FIT HYPBC, echo=TRUE, include=F}
+V=10
+
+X.m1<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.m1)
+y.m1<-dat_hyp.m1$HYPBC
+
+X.m2<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.m2)
+y.m2<-dat_hyp.m2$HYPBC
+
+X.m3<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.m3)
+y.m3<-dat_hyp.m3$HYPBC
+
+X.f1<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.f1)
+y.f1<-dat_hyp.f1$HYPBC
+
+X.f2<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.f2)
+y.f2<-dat_hyp.f2$HYPBC
+
+X.f3<-model.matrix(~-1+BMISC+FIBRET1+AGEC+EXLWTBC+DIASTOL,data=dat_hyp.f3)
+y.f3<-dat_hyp.f3$HYPBC
+
+res.rpart = cv.rpart(X.m1,y.m1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m2,y.m2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.m3,y.m3,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f1,y.f1,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f2,y.f2,V,seed=1)
+res.rpart
+
+res.rpart = cv.rpart(X.f3,y.f3,V,seed=1)
+res.rpart
+```
+####Meaningful Conclusions from Hypertension CART Analysis
+Males with low income, an age greater than 55, a BMI greater than 25, physical activity greater than 38 minutes a week (but less than 125), fibre intake greater than 32 grams a day corresponds to a low chance of hypertension (6 cases). 
+
+Males with high income, an age greater than 59, a BMI greater than 31 and a fibre intake less than 13 grams a day corresponds to a high chance of hypertension (15 cases).
+
+Females with low income, an age less than 55, diastolic blood pressure greater than 94 mm/Hg and a fibre intake greater than 24 grams a day are less likely to suffer from hypertension (18 cases).
+
+Females with an average income, an age less than 60, diastolic blood pressure greater than 92 mm/Hg and a fibre intake greater than 31 grams/day are highly likely to suffer from hypertension (6 cases). So fibre intake may play a less important role here.
+
+For Female with high income level,if age is less than 69, BMI level is less than 28 and diastolic blood pressure less than 96, then get a high hypertensive disease chance(92 cases). Similarly fibre intake may play a less important role here.
+
+#Conclusion
+Within this report, we have investigated the link between an individual's income and diet. With the report agenda being to raise awareness as to the health benefits of incorporating high levels of dietary fibre we have incorporated the use of statistical techniques in order to deduce the answers to the questions that we proposed. We have also built classifiers, borrowing feature variables that literature dictates as important in the prediction of whether an individual would suffer from high cholesterol levels. We then underpinned the negative trends of fibre within unhealthy inviduals and found that this trend was consistent regardless of income category. As such a final CART classification algorithm was implemented in order to deduce the sufficient amount of fibre that an individual should intake daily in order to maintain their health. 
+
+#References 
